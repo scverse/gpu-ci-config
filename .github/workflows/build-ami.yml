@@ -6,7 +6,7 @@ on:
       aws_region:
         description: 'AWS Region to build the AMI in'
         required: true
-        default: 'us-west-2'
+        default: 'eu-west-1'
         type: string
       disk_size:
         description: 'Disk size in GB'
@@ -15,7 +15,7 @@ on:
         type: string
 
 env:
-  AWS_REGION: ${{ github.event.inputs.aws_region || 'us-west-2' }}
+  AWS_REGION: ${{ github.event.inputs.aws_region || 'eu-west-1' }}
 
 jobs:
   build-ami:

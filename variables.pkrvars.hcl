@@ -2,7 +2,7 @@
 # Copy this file to variables.pkrvars.hcl and customize as needed
 
 # AWS Region where the AMI will be built
-region = "us-west-2"
+region = "eu-west-1"
 
 # Instance type for building the AMI (GPU-enabled recommended)
 instance_type = "g4dn.xlarge"

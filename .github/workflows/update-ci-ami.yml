@@ -26,7 +26,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: us-west-2
+          aws-region: eu-west-1
 
       - name: Get AMI ID
         id: get-ami
@@ -41,7 +41,7 @@ jobs:
               --filters "Name=name,Values=cirun-runner-ubuntu24-*" \
               --query 'Images | sort_by(@, &CreationDate) | [-1].ImageId' \
               --output text \
-              --region us-west-2)
+              --region eu-west-1)
             echo "Found latest AMI: $AMI_ID"
           fi
           echo "ami_id=$AMI_ID" >> $GITHUB_OUTPUT
@@ -80,7 +80,7 @@ jobs:
             --image-ids ${{ steps.get-ami.outputs.ami_id }} \
             --query 'Images[0]' \
             --output json \
-            --region us-west-2)
+            --region eu-west-1)
 
           AMI_NAME=$(echo $AMI_INFO | jq -r '.Name')
           AMI_DESCRIPTION=$(echo $AMI_INFO | jq -r '.Description // "No description available"')
@@ -117,7 +117,7 @@ jobs:
             - **Commit Hash:** [`${{ steps.ami-details.outputs.commit_hash }}`](https://github.com/${{ github.repository }}/commit/${{ steps.ami-details.outputs.commit_hash }})
 
             **Base Configuration:**
-            - Ubuntu 24.04 LTS (us-west-2)
+            - Ubuntu 24.04 LTS (eu-west-1)
             - 100GB gp3 storage with 6,000 IOPS and 250 MB/s throughput
             - Automatic system updates disabled for CI stability
 
