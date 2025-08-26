@@ -1,0 +1,73 @@
+name: Test GPU Image
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/test-gpu-image.yml'
+
+jobs:
+  test-gpu-functionality:
+    runs-on: "cirun-gpu-runner--${{ github.run_id }}"
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: System Information
+        run: |
+          echo "=== System Information ==="
+          uname -a
+          lsb_release -a
+          whoami
+          pwd
+
+      - name: Check Disk Space
+        run: |
+          echo "=== Disk Space Information ==="
+          df -h
+          echo ""
+          echo "=== Root filesystem usage ==="
+          df -h / | tail -1 | awk '{print "Used: " $3 " Available: " $4 " Usage: " $5}'
+
+      - name: Check Available Memory
+        run: |
+          echo "=== Memory Information ==="
+          free -h
+          echo ""
+          echo "=== Memory usage ==="
+          free -h | grep '^Mem:' | awk '{print "Total: " $2 " Used: " $3 " Available: " $7}'
+
+      - name: Check CPU Information
+        run: |
+          echo "=== CPU Information ==="
+          lscpu
+          echo ""
+          echo "=== CPU cores ==="
+          nproc
+
+      - name: Test Basic Commands
+        run: |
+          echo "=== Testing basic commands ==="
+          which sudo
+          which docker
+          which git
+          which python3
+          which node
+          which npm
+
+      - name: Test Docker
+        run: |
+          echo "=== Docker Information ==="
+          docker --version
+          sudo docker run hello-world
+
+      - name: Test NVIDIA Drivers
+        run: |
+          echo "=== NVIDIA Driver Test ==="
+          which nvidia-smi
+          nvidia-smi
+          echo ""
+          echo "=== NVIDIA Driver Version ==="
+          nvidia-smi --query-gpu=driver_version --format=csv,noheader,nounits
