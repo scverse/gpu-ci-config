@@ -1,0 +1,33 @@
+name: Lint Packer Templates
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packer/**'
+  pull_request:
+    paths:
+      - 'packer/**'
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Packer
+        uses: hashicorp/setup-packer@main
+        with:
+          version: latest
+
+      - name: Initialize Packer
+        run: |
+          cd packer
+          packer init .
+
+      - name: Format and validate Packer template
+        run: |
+          cd packer
+          packer fmt -check .
+          packer validate .

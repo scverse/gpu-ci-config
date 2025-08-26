@@ -1,0 +1,136 @@
+name: Update CI AMI
+
+on:
+  workflow_dispatch:
+    inputs:
+      ami_id:
+        description: 'AMI ID to update in CI .cirun.yml (optional - will use latest if empty)'
+        required: false
+        type: string
+
+jobs:
+  update-ami:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        repository:
+          - "scverse/anndata"
+      fail-fast: false
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-west-2
+
+      - name: Get AMI ID
+        id: get-ami
+        run: |
+          if [ -n "${{ github.event.inputs.ami_id }}" ]; then
+            AMI_ID="${{ github.event.inputs.ami_id }}"
+            echo "Using provided AMI ID: $AMI_ID"
+          else
+            # Get the latest AMI from AWS using the naming pattern
+            AMI_ID=$(aws ec2 describe-images \
+              --owners self \
+              --filters "Name=name,Values=cirun-runner-ubuntu24-*" \
+              --query 'Images | sort_by(@, &CreationDate) | [-1].ImageId' \
+              --output text \
+              --region us-west-2)
+            echo "Found latest AMI: $AMI_ID"
+          fi
+          echo "ami_id=$AMI_ID" >> $GITHUB_OUTPUT
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ matrix.repository }}
+          token: ${{ secrets.GITHUB_PAT }}
+          path: repo
+          fetch-depth: 0
+
+      - name: Get current AMI from cirun.yml
+        id: current-ami
+        run: |
+          cd repo
+          CURRENT_AMI=$(grep "machine_image:" .cirun.yml | sed 's/.*machine_image: //')
+          echo "current_ami=$CURRENT_AMI" >> $GITHUB_OUTPUT
+          echo "Current AMI in cirun.yml: $CURRENT_AMI"
+
+      - name: Update .cirun.yml with new AMI ID
+        run: |
+          cd repo
+          # Update the AMI ID in .cirun.yml
+          sed -i "s/machine_image: ami-[a-z0-9]*/machine_image: ${{ steps.get-ami.outputs.ami_id }}/" .cirun.yml
+
+          # Verify the change was made
+          echo "Updated .cirun.yml contents:"
+          cat .cirun.yml
+
+      - name: Get AMI details
+        id: ami-details
+        run: |
+          # Get AMI details
+          AMI_INFO=$(aws ec2 describe-images \
+            --image-ids ${{ steps.get-ami.outputs.ami_id }} \
+            --query 'Images[0]' \
+            --output json \
+            --region us-west-2)
+
+          AMI_NAME=$(echo $AMI_INFO | jq -r '.Name')
+          AMI_DESCRIPTION=$(echo $AMI_INFO | jq -r '.Description // "No description available"')
+          CREATION_DATE=$(echo $AMI_INFO | jq -r '.CreationDate')
+          BUILD_JOB_URL=$(echo $AMI_INFO | jq -r '.Tags[]? | select(.Key == "BuildJob") | .Value // "Not available"')
+          COMMIT_HASH=$(echo $AMI_INFO | jq -r '.Tags[]? | select(.Key == "CommitHash") | .Value // "Not available"')
+
+          echo "ami_name=$AMI_NAME" >> $GITHUB_OUTPUT
+          echo "ami_description=$AMI_DESCRIPTION" >> $GITHUB_OUTPUT
+          echo "creation_date=$CREATION_DATE" >> $GITHUB_OUTPUT
+          echo "build_job_url=$BUILD_JOB_URL" >> $GITHUB_OUTPUT
+          echo "commit_hash=$COMMIT_HASH" >> $GITHUB_OUTPUT
+
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.GITHUB_PAT }}
+          path: repo
+          commit-message: "Update cirun AMI to ${{ steps.get-ami.outputs.ami_id }}"
+          title: "Update cirun AMI to `${{ steps.get-ami.outputs.ami_id }}`"
+          body: |
+            ## 🚀 AMI Update
+
+            This PR updates the cirun.io AMI configuration with a newly built AMI.
+
+            **Changes:**
+            - **Previous AMI:** `${{ steps.current-ami.outputs.current_ami }}`
+            - **New AMI:** `${{ steps.get-ami.outputs.ami_id }}`
+            - **AMI Name:** `${{ steps.ami-details.outputs.ami_name }}`
+            - **Created:** `${{ steps.ami-details.outputs.creation_date }}`
+            - **Description:** `${{ steps.ami-details.outputs.ami_description }}`
+            - **Build Job:** [${{ steps.ami-details.outputs.build_job_url }}](${{ steps.ami-details.outputs.build_job_url }})
+            - **Commit Hash:** [`${{ steps.ami-details.outputs.commit_hash }}`](https://github.com/${{ github.repository }}/commit/${{ steps.ami-details.outputs.commit_hash }})
+
+            **Base Configuration:**
+            - Ubuntu 24.04 LTS (us-west-2)
+            - 100GB gp3 storage with 6,000 IOPS and 250 MB/s throughput
+            - Automatic system updates disabled for CI stability
+
+            **Pre-installed Tools:**
+            - Docker & Docker Compose
+            - Kubernetes tools (kubectl, kind, k9s)
+            - Node.js 20 & npm
+            - Miniconda (latest)
+            - Playwright (via pipx)
+            - AWS CLI v2
+            - Common utilities (jq, hub, git, curl, wget)
+
+            ---
+            🤖 Generated automatically by [scverse-gpu-ci-config](https://github.com/${{ github.repository }})
+          branch: update-ami-${{ steps.get-ami.outputs.ami_id }}
+          delete-branch: true

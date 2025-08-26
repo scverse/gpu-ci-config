@@ -1,0 +1,107 @@
+name: Cleanup Old AMIs
+
+on:
+  schedule:
+    # Run weekly on Sundays at 2 AM UTC
+    - cron: '0 2 * * 0'
+  workflow_dispatch:
+    inputs:
+      keep_count:
+        description: 'Number of most recent AMIs to keep'
+        required: false
+        default: '5'
+        type: string
+
+env:
+  AWS_REGION: us-west-2
+  DEFAULT_KEEP_COUNT: 5
+
+jobs:
+  cleanup-amis:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Cleanup old AMIs
+        run: |
+          # Use input value or default
+          KEEP_COUNT="${{ github.event.inputs.keep_count || env.DEFAULT_KEEP_COUNT }}"
+          echo "Keeping $KEEP_COUNT most recent AMIs"
+
+          # Get all AMIs with cirun-images tag, sorted by creation date (newest first)
+          AMI_LIST=$(aws ec2 describe-images \
+            --owners self \
+            --filters "Name=tag:Project,Values=cirun-images" \
+            --query 'Images | sort_by(@, &CreationDate) | reverse(@) | [].{ImageId: ImageId, Name: Name, CreationDate: CreationDate}' \
+            --output json \
+            --region ${{ env.AWS_REGION }})
+
+          # Count total AMIs
+          TOTAL_AMIS=$(echo "$AMI_LIST" | jq length)
+          echo "Found $TOTAL_AMIS total AMIs with cirun-images tag"
+
+          if [ "$TOTAL_AMIS" -le "$KEEP_COUNT" ]; then
+            echo "Total AMIs ($TOTAL_AMIS) is less than or equal to keep count ($KEEP_COUNT). Nothing to delete."
+            exit 0
+          fi
+
+          # Get AMIs to delete (skip the first KEEP_COUNT)
+          AMIS_TO_DELETE=$(echo "$AMI_LIST" | jq -r ".[$KEEP_COUNT:] | .[].ImageId")
+          DELETE_COUNT=$(echo "$AMIS_TO_DELETE" | wc -l)
+
+          echo "Will delete $DELETE_COUNT AMIs (keeping $KEEP_COUNT most recent)"
+
+          # Delete old AMIs
+          for AMI_ID in $AMIS_TO_DELETE; do
+            AMI_NAME=$(echo "$AMI_LIST" | jq -r ".[] | select(.ImageId == \"$AMI_ID\") | .Name")
+            AMI_DATE=$(echo "$AMI_LIST" | jq -r ".[] | select(.ImageId == \"$AMI_ID\") | .CreationDate")
+
+            echo "Deleting AMI: $AMI_ID ($AMI_NAME) created on $AMI_DATE"
+
+            # Get snapshots associated with this AMI
+            SNAPSHOTS=$(aws ec2 describe-images \
+              --image-ids "$AMI_ID" \
+              --query 'Images[0].BlockDeviceMappings[?Ebs.SnapshotId != null].Ebs.SnapshotId' \
+              --output text \
+              --region ${{ env.AWS_REGION }})
+
+            # Deregister AMI
+            aws ec2 deregister-image --image-id "$AMI_ID" --region ${{ env.AWS_REGION }}
+
+            # Delete associated snapshots
+            for SNAPSHOT_ID in $SNAPSHOTS; do
+              if [ -n "$SNAPSHOT_ID" ] && [ "$SNAPSHOT_ID" != "None" ]; then
+                echo "  Deleting snapshot: $SNAPSHOT_ID"
+                aws ec2 delete-snapshot --snapshot-id "$SNAPSHOT_ID" --region ${{ env.AWS_REGION }}
+              fi
+            done
+
+            echo "  Successfully deleted AMI $AMI_ID and its snapshots"
+          done
+
+          echo "Cleanup completed. Deleted $DELETE_COUNT AMIs, kept $KEEP_COUNT most recent."
+
+      - name: Generate cleanup summary
+        run: |
+          KEEP_COUNT="${{ github.event.inputs.keep_count || env.DEFAULT_KEEP_COUNT }}"
+          echo "# 🧹 AMI Cleanup Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Cleanup Details" >> $GITHUB_STEP_SUMMARY
+          echo "- **Region:** ${{ env.AWS_REGION }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Tag Filter:** Project=cirun-images" >> $GITHUB_STEP_SUMMARY
+          echo "- **Keep Count:** $KEEP_COUNT most recent AMIs" >> $GITHUB_STEP_SUMMARY
+          echo "- **Cleanup Date:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "- **Trigger:** ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## What was cleaned up" >> $GITHUB_STEP_SUMMARY
+          echo "- Deregistered old AMIs (keeping $KEEP_COUNT most recent)" >> $GITHUB_STEP_SUMMARY
+          echo "- Deleted associated EBS snapshots" >> $GITHUB_STEP_SUMMARY
+          echo "- Freed up storage costs for unused images" >> $GITHUB_STEP_SUMMARY

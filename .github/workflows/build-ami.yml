@@ -1,0 +1,106 @@
+name: Build AMI
+
+on:
+  workflow_dispatch:
+    inputs:
+      aws_region:
+        description: 'AWS Region to build the AMI in'
+        required: true
+        default: 'us-west-2'
+        type: string
+      disk_size:
+        description: 'Disk size in GB'
+        required: true
+        default: '125'
+        type: string
+
+env:
+  AWS_REGION: ${{ github.event.inputs.aws_region || 'us-west-2' }}
+
+jobs:
+  build-ami:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Packer
+        uses: hashicorp/setup-packer@main
+        with:
+          version: latest
+
+      - name: Initialize Packer
+        run: |
+          cd packer
+          packer init .
+
+      - name: Format and validate Packer template
+        run: |
+          cd packer
+          packer fmt -check .
+          packer validate .
+
+      - name: Build AMI
+        id: build
+        run: |
+          cd packer
+          BUILD_JOB_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          COMMIT_HASH="${{ github.sha }}"
+          GITHUB_ACTOR="${{ github.actor }}"
+          DISK_SIZE="${{ github.event.inputs.disk_size || '125' }}"
+          if ! packer build \
+            -var "region=${{ env.AWS_REGION }}" \
+            -var "ami_name=cirun-runner-ubuntu24" \
+            -var "build_job_url=${BUILD_JOB_URL}" \
+            -var "commit_hash=${COMMIT_HASH}" \
+            -var "github_actor=${GITHUB_ACTOR}" \
+            -var "disk_size=${DISK_SIZE}" \
+            . | tee build.log; then
+            echo "❌ Packer build failed"
+            exit 1
+          fi
+
+          # Extract AMI ID from packer output
+          AMI_ID=$(grep -oP 'ami-[a-z0-9]+' build.log | tail -1)
+          if [ -z "$AMI_ID" ]; then
+            echo "❌ Failed to extract AMI ID from build output"
+            exit 1
+          fi
+          echo "ami_id=$AMI_ID" >> $GITHUB_OUTPUT
+          echo "build_job_url=$BUILD_JOB_URL" >> $GITHUB_OUTPUT
+
+      - name: Generate Build Summary
+        if: success()
+        run: |
+          echo "# 🚀 AMI Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Build Details" >> $GITHUB_STEP_SUMMARY
+          echo "- **Region:** ${{ env.AWS_REGION }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **AMI ID:** ${{ steps.build.outputs.ami_id }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **AMI Name:** cirun-runner-ubuntu24-$(date +%Y%m%d-%H%M)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Base Image:** Dynamic Ubuntu 24.04 LTS lookup" >> $GITHUB_STEP_SUMMARY
+          echo "- **Build Date:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "- **Trigger:** ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Pre-installed Tools" >> $GITHUB_STEP_SUMMARY
+          echo "- Docker & Docker Compose" >> $GITHUB_STEP_SUMMARY
+          echo "- NVIDIA drivers and CUDA toolkit" >> $GITHUB_STEP_SUMMARY
+          echo "- NVIDIA Container Toolkit" >> $GITHUB_STEP_SUMMARY
+          echo "- Node.js 20 & npm" >> $GITHUB_STEP_SUMMARY
+          echo "- Miniconda (latest)" >> $GITHUB_STEP_SUMMARY
+          echo "- Python3 with pip, venv, and pipx" >> $GITHUB_STEP_SUMMARY
+          echo "- Common utilities (jq, hub, git, curl, wget, unzip, xvfb)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Usage" >> $GITHUB_STEP_SUMMARY
+          echo "Use this AMI ID \`${{ steps.build.outputs.ami_id }}\` in your cirun.io configuration for ${{ env.AWS_REGION }}" >> $GITHUB_STEP_SUMMARY
