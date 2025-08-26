@@ -12,13 +12,13 @@ This repository manages GPU-enabled AMI images for CI/CD workflows with cirun.io
 
 2. Set up GitHub repository secrets:
    - `AWS_ROLE_ARN` - IAM role ARN for AWS authentication
-   - `GITHUB_PAT` - GitHub Personal Access Token with repo permissions
+   - `BOT_GH_TOKEN` - GitHub Personal Access Token with repo permissions
 
 ### Repository Access
 The workflow updates AMI configurations in these repositories:
 - `scverse/anndata`
 
-Ensure the `GITHUB_PAT` token has write access to these repositories.
+Ensure the `BOT_GH_TOKEN` token has write access to these repositories.
 
 ## Usage
 

@@ -50,7 +50,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: ${{ matrix.repository }}
-          token: ${{ secrets.GITHUB_PAT }}
+          token: ${{ secrets.BOT_GH_TOKEN }}
           path: repo
           fetch-depth: 0
 
@@ -98,7 +98,7 @@ jobs:
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v5
         with:
-          token: ${{ secrets.GITHUB_PAT }}
+          token: ${{ secrets.BOT_GH_TOKEN }}
           path: repo
           commit-message: "Update cirun AMI to ${{ steps.get-ami.outputs.ami_id }}"
           title: "Update cirun AMI to `${{ steps.get-ami.outputs.ami_id }}`"
