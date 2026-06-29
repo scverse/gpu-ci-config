@@ -100,28 +100,25 @@ build {
     "source.amazon-ebs.ubuntu"
   ]
 
+  # System preparation and shared prerequisites must run first so the later
+  # installers never hit a missing tool (unzip, gcc, gnupg, ...).
   provisioner "shell" {
-    script = "scripts/disable-upgrades.sh"
+    script = "scripts/01_setup-system.sh"
   }
 
   provisioner "shell" {
-    script = "scripts/install-docker.sh"
+    script = "scripts/02_install-docker.sh"
   }
 
   provisioner "shell" {
-    script = "scripts/install-nvidia-drivers.sh"
+    script = "scripts/03_install-nvidia.sh"
   }
 
   provisioner "shell" {
-    script = "scripts/preinstall-tools.sh"
+    script = "scripts/04_install-ci-tools.sh"
   }
 
   provisioner "shell" {
-    inline = [
-      "sudo apt-get update",
-      "sudo apt-get upgrade -y",
-      "sudo apt-get autoremove -y",
-      "sudo apt-get autoclean"
-    ]
+    script = "scripts/99_cleanup.sh"
   }
 }
