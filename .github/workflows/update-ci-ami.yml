@@ -23,16 +23,17 @@ jobs:
 
     steps:
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@254c19bd240aabef8777f48595e9d2d7b972184b # v6.2.1
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: eu-west-1
 
       - name: Get AMI ID
         id: get-ami
+        env:
+          AMI_ID: ${{ github.event.inputs.ami_id }}
         run: |
-          if [ -n "${{ github.event.inputs.ami_id }}" ]; then
-            AMI_ID="${{ github.event.inputs.ami_id }}"
+          if [ -n "$AMI_ID" ]; then
             echo "Using provided AMI ID: $AMI_ID"
           else
             # Get the latest AMI from AWS using the naming pattern
@@ -47,12 +48,13 @@ jobs:
           echo "ami_id=$AMI_ID" >> $GITHUB_OUTPUT
 
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           repository: ${{ matrix.repository }}
           token: ${{ secrets.BOT_GH_TOKEN }}
           path: repo
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Get current AMI from cirun.yml
         id: current-ami
@@ -63,10 +65,12 @@ jobs:
           echo "Current AMI in cirun.yml: $CURRENT_AMI"
 
       - name: Update .cirun.yml with new AMI ID
+        env:
+          AMI_ID: ${{ steps.get-ami.outputs.ami_id }}
         run: |
           cd repo
           # Update the AMI ID in .cirun.yml
-          sed -i "s/machine_image: ami-[a-z0-9]*/machine_image: ${{ steps.get-ami.outputs.ami_id }}/" .cirun.yml
+          sed -i "s/machine_image: ami-[a-z0-9]*/machine_image: $AMI_ID/" .cirun.yml
 
           # Verify the change was made
           echo "Updated .cirun.yml contents:"
@@ -74,10 +78,12 @@ jobs:
 
       - name: Get AMI details
         id: ami-details
+        env:
+          AMI_ID: ${{ steps.get-ami.outputs.ami_id }}
         run: |
           # Get AMI details
           AMI_INFO=$(aws ec2 describe-images \
-            --image-ids ${{ steps.get-ami.outputs.ami_id }} \
+            --image-ids "$AMI_ID" \
             --query 'Images[0]' \
             --output json \
             --region eu-west-1)
@@ -96,7 +102,7 @@ jobs:
 
 
       - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v5
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
         with:
           token: ${{ secrets.BOT_GH_TOKEN }}
           path: repo
