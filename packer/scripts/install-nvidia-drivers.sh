@@ -14,14 +14,16 @@ uname -r
 # Check for NVIDIA GPU (may not work in all environments)
 lspci | grep -i nvidia || echo "Note: NVIDIA GPU check may not work in build environment"
 
-# Verify gcc is installed
-gcc --version
-
 # Update package lists
 sudo apt-get update
 
-# Install required packages for CUDA installation
+# Install required packages for CUDA installation. build-essential provides
+# gcc, which is needed to build the NVIDIA kernel modules, so it must be
+# installed before the gcc verification below.
 sudo apt-get install -y linux-headers-$(uname -r) build-essential
+
+# Verify gcc is installed
+gcc --version
 
 # Force Ubuntu 24.04 repository (we must use Ubuntu 24.04)
 echo "Detecting Ubuntu version..."

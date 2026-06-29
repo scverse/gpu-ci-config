@@ -53,6 +53,9 @@ jobs:
       - name: Build AMI
         id: build
         run: |
+          # pipefail is required so a packer failure isn't masked by the
+          # exit status of the `tee` at the end of the pipeline below.
+          set -eo pipefail
           cd packer
           BUILD_JOB_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           COMMIT_HASH="${{ github.sha }}"
