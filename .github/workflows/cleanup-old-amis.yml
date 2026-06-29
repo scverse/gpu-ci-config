@@ -25,15 +25,16 @@ jobs:
 
     steps:
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@254c19bd240aabef8777f48595e9d2d7b972184b # v6.2.1
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Cleanup old AMIs
-        run: |
+        env:
           # Use input value or default
-          KEEP_COUNT="${{ github.event.inputs.keep_count || env.DEFAULT_KEEP_COUNT }}"
+          KEEP_COUNT: ${{ github.event.inputs.keep_count || env.DEFAULT_KEEP_COUNT }}
+        run: |
           echo "Keeping $KEEP_COUNT most recent AMIs"
 
           # Get all AMIs with cirun-images tag, sorted by creation date (newest first)
@@ -90,8 +91,9 @@ jobs:
           echo "Cleanup completed. Deleted $DELETE_COUNT AMIs, kept $KEEP_COUNT most recent."
 
       - name: Generate cleanup summary
+        env:
+          KEEP_COUNT: ${{ github.event.inputs.keep_count || env.DEFAULT_KEEP_COUNT }}
         run: |
-          KEEP_COUNT="${{ github.event.inputs.keep_count || env.DEFAULT_KEEP_COUNT }}"
           echo "# 🧹 AMI Cleanup Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "## Cleanup Details" >> $GITHUB_STEP_SUMMARY
