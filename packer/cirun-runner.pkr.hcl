@@ -109,10 +109,6 @@ build {
   }
 
   provisioner "shell" {
-    script = "scripts/setup-runner.sh"
-  }
-
-  provisioner "shell" {
     script = "scripts/install-nvidia-drivers.sh"
   }
 

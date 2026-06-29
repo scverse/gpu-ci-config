@@ -10,22 +10,37 @@ sudo apt-get update
 sudo useradd -m -s /bin/bash runnerx
 sudo usermod -aG docker runnerx
 
-# Install essential tools from workflow analysis
+# Install AWS CLI v2
+curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+unzip awscliv2.zip
+sudo ./aws/install
+rm -rf awscliv2.zip aws/
+
+# Install essential tools for CI runner 
 sudo apt-get install -y \
     jq \
     hub \
     xvfb \
     curl \
     wget \
-    unzip
+    unzip \
+    python3-pip \
+    python3-venv \
+    pipx \
+    uv \
+    git \
+    build-essential \
+    nodejs \
+    npm \
+    gh
 
-# Remove conflicting packages first
-sudo apt-get remove -y nodejs npm libnode-dev nodejs-doc || true
-sudo apt-get autoremove -y
+# # Remove conflicting packages first
+# sudo apt-get remove -y nodejs npm libnode-dev nodejs-doc || true
+# sudo apt-get autoremove -y
 
-# Install Node.js 20 (version specified in workflow)
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-sudo apt-get install -y nodejs
+# # Install Node.js 20 (version specified in workflow)
+# curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+# sudo apt-get install -y nodejs
 
 # Install miniconda for runnerx user (matching CI runner environment)
 sudo -u runnerx wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O /home/runnerx/miniconda.sh
@@ -37,7 +52,6 @@ echo 'export PATH="/home/runnerx/miniconda3/bin:$PATH"' | sudo tee -a /home/runn
 
 # Install pipx for Python package management
 sudo apt-get install -y python3-pip python3-venv pipx
-
 
 # Create necessary directories
 sudo mkdir -p /opt/runnerx
