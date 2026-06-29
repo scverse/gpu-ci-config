@@ -1,8 +1,13 @@
 #!/bin/bash
 set -e
 
-# Update package index
+# Update package index and bring the base image up to date first.
+# The Ubuntu 24.04 base AMI ships with older gnupg/libksba8/gpg-agent
+# packages; installing gnupg below pulls newer versions that require an
+# updated libksba8 (>= 1.6.3), which fails with "unmet dependencies"
+# unless the base packages are upgraded beforehand.
 sudo apt-get update
+sudo apt-get upgrade -y
 
 # Install packages to allow apt to use a repository over HTTPS
 sudo apt-get install -y \
