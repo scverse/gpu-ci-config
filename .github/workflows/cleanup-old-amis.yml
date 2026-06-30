@@ -6,6 +6,14 @@ on:
     - cron: '0 2 * * 0'
   workflow_dispatch:
     inputs:
+      environment:
+        description: 'Environment to run in (selects scoped secrets)'
+        required: true
+        default: 'PROD'
+        type: choice
+        options:
+          - DEV
+          - PROD
       keep_count:
         description: 'Number of most recent AMIs to keep'
         required: false
@@ -19,6 +27,7 @@ env:
 jobs:
   cleanup-amis:
     runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment || 'PROD' }}
     permissions:
       id-token: write
       contents: read
@@ -27,7 +36,7 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@254c19bd240aabef8777f48595e9d2d7b972184b # v6.2.1
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-to-assume: ${{ secrets.AWS_AMI_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Cleanup old AMIs
