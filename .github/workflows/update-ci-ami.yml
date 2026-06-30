@@ -3,6 +3,14 @@ name: Update CI AMI
 on:
   workflow_dispatch:
     inputs:
+      environment:
+        description: 'Environment to run in (selects scoped secrets)'
+        required: true
+        default: 'DEV'
+        type: choice
+        options:
+          - DEV
+          - PROD
       ami_id:
         description: 'AMI ID to update in CI .cirun.yml (optional - will use latest if empty)'
         required: false
@@ -11,6 +19,7 @@ on:
 jobs:
   update-ami:
     runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment }}
     strategy:
       matrix:
         repository:
@@ -25,7 +34,7 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@254c19bd240aabef8777f48595e9d2d7b972184b # v6.2.1
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-to-assume: ${{ secrets.AWS_AMI_ARN }}
           aws-region: eu-west-1
 
       - name: Get AMI ID

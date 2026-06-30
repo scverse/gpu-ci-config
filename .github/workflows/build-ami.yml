@@ -3,6 +3,14 @@ name: Build AMI
 on:
   workflow_dispatch:
     inputs:
+      environment:
+        description: 'Environment to run in (selects scoped secrets)'
+        required: true
+        default: 'DEV'
+        type: choice
+        options:
+          - DEV
+          - PROD
       aws_region:
         description: 'AWS Region to build the AMI in'
         required: true
@@ -20,6 +28,7 @@ env:
 jobs:
   build-ami:
     runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment }}
     permissions:
       id-token: write
       contents: read
@@ -33,7 +42,7 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@254c19bd240aabef8777f48595e9d2d7b972184b # v6.2.1
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-to-assume: ${{ secrets.AWS_AMI_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Setup Packer
